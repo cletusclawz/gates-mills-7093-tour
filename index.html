@@ -208,7 +208,7 @@ footer .disc{max-width:620px;font-size:.82rem;line-height:1.6;color:#a9a195}
 <section class="hero" id="hero" aria-label="7093 Gates Mills Blvd">
   <img class="poster" src="media/hero.jpg" alt="A white Greek Revival home with paired columns, seen from the drive">
   <video id="heroVid" autoplay muted loop playsinline preload="auto" poster="media/hero.jpg" aria-hidden="true">
-    <source src="media/hero-film.mp4" type="video/mp4"><source src="media/hero-film.webm" type="video/webm">
+    <script>if(matchMedia("(max-width: 820px)").matches)document.write('<source src="media/hero-film-p.mp4" type="video/mp4">')</script><source src="media/hero-film.mp4" type="video/mp4"><source src="media/hero-film.webm" type="video/webm">
   </video>
   <p class="demo-tag" role="note">Tour preview · built from the listing photos</p>
   <div class="hero-inner">
@@ -238,7 +238,7 @@ footer .disc{max-width:620px;font-size:.82rem;line-height:1.6;color:#a9a195}
 
 <section class="walk" id="tour" aria-label="Scroll-driven walkthrough of the house">
   <div class="stage">
-    <video id="walkVid" muted playsinline preload="auto" poster="media/walk.jpg" aria-hidden="true"><source src="media/walk.mp4" type="video/mp4"></video>
+    <video id="walkVid" muted playsinline preload="none" poster="media/walk.jpg" aria-hidden="true"></video>
     <p class="hint" aria-hidden="true">Scroll to walk through</p>
     <div class="cap" id="walkCap" aria-live="polite"><span class="n" id="walkN">01 / 05</span><h3 id="walkT">Arrival</h3><p id="walkP">Paired columns and a classic pediment, set back on a lawn among mature trees.</p></div>
     <div class="rail" aria-hidden="true"><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span></div>
@@ -267,7 +267,7 @@ footer .disc{max-width:620px;font-size:.82rem;line-height:1.6;color:#a9a195}
     <div><p class="eyebrow reveal">Golden hour to twilight</p><h2 id="dT" class="reveal">See it after <em>dark.</em></h2>
     <p class="reveal">Drag the sun down. The white brick warms, the sky turns blue and the windows come up gold.</p></div>
     <div class="reveal">
-      <div class="dn-view"><video id="dnVid" muted playsinline preload="auto" poster="media/d2n.jpg" aria-hidden="true"><source src="media/d2n.mp4" type="video/mp4"></video></div>
+      <div class="dn-view"><video id="dnVid" muted playsinline preload="none" poster="media/d2n.jpg" aria-hidden="true"></video></div>
       <div class="dn-ctl"><span>6:40 pm</span><input type="range" id="dnRange" min="0" max="1000" value="0" aria-label="Time of day, from sunset to night"><span>8:15 pm</span></div>
       <p class="dn-read" id="dnRead" aria-live="polite">7:48 pm · golden hour</p>
     </div>
@@ -369,6 +369,20 @@ function tick(){shown+=(target-shown)*.18;if(wv.duration&&Math.abs(wv.currentTim
 function onScroll(){const p=prog();document.querySelector('.walk .hint').classList.toggle('gone',p>.04);target=p;let i=0;STOPS.forEach((s,k)=>{if(p>=s)i=k});setRoom(i);
   bars.forEach((b,k)=>{const a=STOPS[k],z=STOPS[k+1]||1;b.style.width=Math.min(100,Math.max(0,(p-a)/(z-a)*100))+'%'});if(!raf)raf=requestAnimationFrame(tick)}
 wv.pause();addEventListener('scroll',onScroll,{passive:true});wv.addEventListener('loadedmetadata',onScroll);
+// fast walkthrough: phones get a small portrait encode; the whole file is pulled into memory once so scroll-seeking never waits on the network
+const MOB=matchMedia('(max-width: 820px)').matches;
+const WSRC=MOB?'media/walk-p.mp4':'media/walk.mp4';
+const whint=document.querySelector('.walk .hint'),WH=whint.textContent;let wStarted=false;
+function loadWalk(){if(wStarted)return;wStarted=true;whint.textContent='Loading the walkthrough';
+  const done=b=>{wv.src=URL.createObjectURL(b);wv.load();wv.addEventListener('loadeddata',()=>{whint.textContent=WH;
+    const p=wv.play();if(p)p.then(()=>{wv.pause();onScroll()}).catch(()=>{});onScroll()},{once:true})};
+  fetch(WSRC).then(r=>{if(!r.ok)throw 0;const tot=+r.headers.get('content-length')||0;
+    if(!r.body||!tot)return r.blob();const rd=r.body.getReader(),parts=[];let got=0;
+    const pump=()=>rd.read().then(({done:d,value})=>{if(d)return new Blob(parts,{type:'video/mp4'});parts.push(value);got+=value.length;
+      whint.textContent='Loading the walkthrough '+Math.round(got/tot*100)+'%';return pump()});return pump()})
+  .then(done).catch(()=>{wv.preload='auto';wv.src=WSRC;whint.textContent=WH})}
+new IntersectionObserver((es,ob)=>{if(es.some(e=>e.isIntersecting)){loadWalk();ob.disconnect()}},{rootMargin:'1200px 0px'}).observe(walk);
+if(document.readyState==='complete')setTimeout(loadWalk,600);else addEventListener('load',()=>setTimeout(loadWalk,600),{once:true});
 // gauge follows the tour
 const gd=document.getElementById('gDot'),gr=document.getElementById('gRead');
 const GZ=[['hero','Arrival'],['tour','The walk'],['rooms','Residence'],['setting','Setting'],['showing','Your visit']];
@@ -381,6 +395,7 @@ const T=['6:40 pm · golden hour','7:05 pm · sunset','7:30 pm · dusk','7:50 pm
 dv.pause();
 function dn(){const f=dr.value/1000;if(dv.duration)dv.currentTime=f*(dv.duration-.05);dread.textContent=T[Math.min(4,Math.floor(f*5))]}
 dr.addEventListener('input',dn);dv.addEventListener('loadedmetadata',dn);
+new IntersectionObserver((es,ob)=>{if(es.some(e=>e.isIntersecting)){dv.preload='auto';dv.src=matchMedia('(max-width: 820px)').matches?'media/d2n-m.mp4':'media/d2n.mp4';dv.load();ob.disconnect()}},{rootMargin:'900px 0px'}).observe(dv);
 // gentle auto-demo of the slider the first time it is seen (stops on touch)
 let demo=null;const dno=new IntersectionObserver(es=>{if(es[0].isIntersecting&&!RM&&!dr.dataset.touched){let v=0,d=1;
   demo=setInterval(()=>{v+=d*8;if(v>=1000||v<=0)d*=-1;dr.value=v;dn()},40);dno.disconnect()}},{threshold:.6});dno.observe(dv);
